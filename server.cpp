@@ -73,6 +73,7 @@ void MyAudioCallback(void* userdata, Uint8* stream, int len) {
 			else data[j] = sample;  // avoid overflow noise
 		}
 	}
+	for (int i=0; i<len/2; ++i) data[i] &= ~0x000F;  // 16bit -> 12bit
 	plays.erase(remove_if(plays.begin(), plays.end(), [](play_t& play) { return play.idx >= play.sound.size; }), plays.end());
 	plays_mutex.unlock();
 
@@ -123,17 +124,17 @@ int main(int argc, char* argv[]) {
     }
 	SDL_PauseAudioDevice(dev, 0);  // play! this will call callback function
 #else
-	// initialize serial here
+	// initialize serial here, to call MyAudioCallback if data needed
 #endif
 
-	play_add("piano/41!.mp3", 1);
-	sleep(1);
-	play_add("piano/51!.mp3", 1);
-	sleep(1);
-	play_add("piano/61!.mp3", 1);
+	// play_add("piano/41!.mp3", 1);
+	// sleep(1);
+	// play_add("piano/51!.mp3", 1);
+	// sleep(1);
+	// play_add("piano/61!.mp3", 1);  // test OK !!!
 
 	mosquitto_loop_forever(mosq, -1, 1);
-	
+
     mosquitto_destroy(mosq);
     mosquitto_lib_cleanup();
 }
@@ -144,17 +145,33 @@ void log_callback(struct mosquitto *mosq, void *userdata, int level, const char 
 
 void message_callback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *message) {
     static char msgbuf[256];
-    if (strcmp(message->topic, "band/query") == 0) {  // reply to query
-        mosquitto_publish(mosq, NULL, "band/info", strlen(VERSION_STR), VERSION_STR, USEQOS, 0);
-    }
+	if (strncmp(message->topic, "band/", 5) == 0) {
+		char* subtopic = message->topic + 5;
+		if (strcmp(subtopic, "query") == 0) {  // reply to query
+			mosquitto_publish(mosq, NULL, "band/info", strlen(VERSION_STR), VERSION_STR, USEQOS, 0);
+		} else if (strlen(subtopic) >= 7 && subtopic[6] == '/') {
+			char* clientid = subtopic;
+			clientid[6] = '\0';  // this will modify message->topic !!!!
+			char* subsubtopic = subtopic + 7;
+			char* payload = (char*)message->payload;
+			payload[message->payloadlen] = '\0';
+			printf("clientid %s[%s]: %s\n", clientid, subsubtopic, payload);
+			if (strcmp(subsubtopic, "play") == 0) {
+				play_add(payload, 1);
+			}
+		}
+	}
 }
 
 void connect_callback(struct mosquitto *mosq, void *userdata, int result) {
-    int i;
-    if(!result){
+    if (!result) {
         /* Subscribe to broker information topics on successful connect. */
         mosquitto_subscribe(mosq, NULL, "band/query", USEQOS);
-    }else{
+		// the following is related to clientid, which is exactly 6 byte name
+		mosquitto_subscribe(mosq, NULL, "band/+/register", USEQOS);  // register with prefered scale, return band/+/scale: scale now
+		mosquitto_subscribe(mosq, NULL, "band/+/play", USEQOS);  // play sound, return band/+/start: id
+		mosquitto_subscribe(mosq, NULL, "band/+/stop", USEQOS);  // stop sound, return band/+/end: id
+    } else {
         fprintf(stderr, "Connect failed\n");
     }
 }
@@ -213,6 +230,10 @@ void load_mp3_childdirs(const char* dirpath, const char* dirname) {  // name is 
 		}
 		// printf("d_name : %s\n", ptr->d_name);
 	}
+	// print memory usage
+	int sum = 0;
+	for (auto i=sounds.begin(); i!=sounds.end(); ++i) sum += i->second.size;
+	printf("summary: %d samples in total, that is %fMB\n", sum, sum*2/1e6);
 }
 
 int play_add(const sound_t& sound, float scale) {

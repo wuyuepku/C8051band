@@ -33,7 +33,7 @@ html, body {
 <body>
 	<div id="main">
 		<div id="inner">
-			<img style="height: 30%;" src="favicon.png">
+			<img style="height: 30%;" src="favicon.png" onclick="play_41()">
 			<p>C8051band</p>
 			<p style="font-size: 60%; color: grey;">a multi-user music player with C8051F020</p>
 			<p style="font-size: 40%; color: peru;">
@@ -115,6 +115,11 @@ html, body {
 		var reg = new RegExp("(^|&)"+ name +"=([^&]*)(&|$)");
 		var r = window.location.search.substr(1).match(reg);
 		if(r!=null) return unescape(r[2]); return null;
+	}
+	function play_41() {
+		let message = new Paho.MQTT.Message("piano/41!.mp3");
+		message.destinationName = "band/" + clientid + "/play";
+		mqtt.send(message);
 	}
 </script>
 </body>
