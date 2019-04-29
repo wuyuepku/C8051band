@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <SDL2/SDL.h>
 
 #define VERSION_STR "C8051band v0.0.1, compiled at " __TIME__ ", " __DATE__ 
 #define USEQOS 0
@@ -24,6 +25,14 @@ void log_callback(struct mosquitto *mosq, void *userdata, int level, const char 
 void message_callback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *message);
 void connect_callback(struct mosquitto *mosq, void *userdata, int result);
 void subscribe_callback(struct mosquitto *mosq, void *userdata, int mid, int qos_count, const int *granted_qos);
+
+// void MyAudioCallback(void* userdata, Uint8* stream, int len) {
+// 	printf("stream %p, len is %d\n", stream, len);
+// 	uint16_t* data = (uint16_t*)stream;
+// 	for (int i=0; i<len/2; ++i) {
+// 		data[i] = 32768 + sin(i/16.0)*30000;
+// 	}
+// }
 
 int main(int argc, char* argv[]) {
 	// init mqtt server
@@ -46,13 +55,51 @@ int main(int argc, char* argv[]) {
 	mosquitto_subscribe_callback_set(mosq, subscribe_callback);
     printf("mqtt client connect success\n");
 
+	// init mp3 decoder library minimp3
 	mp3dec_t mp3d;
 	mp3dec_init(&mp3d);
 	mp3dec_frame_info_t info;
 	short pcm[MINIMP3_MAX_SAMPLES_PER_FRAME];
-	samples = mp3dec_decode_frame(&mp3d, input_buf, buf_size, pcm, &info);
+	// samples = mp3dec_decode_frame(&mp3d, input_buf, buf_size, pcm, &info);
+
+	// init sdl2
+	if (SDL_Init(SDL_INIT_AUDIO) < 0) {
+        printf("error: sdl init failed: %s\n", SDL_GetError()); return 0;
+    }
+	SDL_AudioSpec want, have;
+	SDL_AudioDeviceID dev;
+	want.freq = 8000;
+	want.format = AUDIO_U16;  // uint16_t, MCU will use 12bit unsigned value
+	want.channels = 1;
+	want.samples = 512;
+	want.callback = NULL;  // no callback but use queue
+	want.userdata = NULL;  // pass here for user-defined data
+	dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
+	printf("have freq = %d, samples = %d, silence = %d, size = %d\n", have.freq, have.samples, have.silence, have.size);
+	if (dev <= 0) {
+        printf("error: couldn't open audio: %s\n", SDL_GetError()); return 0;
+    }
+	printf("queued size: %d\n", SDL_GetQueuedAudioSize(dev));
+	uint16_t data[512];
+	for (int i=0; i<512; ++i) {
+		data[i] = 32768 + 32000 * sin(3.1415926*i/2);
+	}
+	SDL_QueueAudio(dev, data, sizeof(data));
+	SDL_QueueAudio(dev, data, sizeof(data));
+	printf("queued size: %d\n", SDL_GetQueuedAudioSize(dev));
+	SDL_PauseAudioDevice(dev, 0);  // play! this will call callback function
+
+	while (1) {
+		int size = SDL_GetQueuedAudioSize(dev);
+		if (size <= 512) {
+			printf("size is %d\n", size);
+			SDL_QueueAudio(dev, data, sizeof(data));
+		}
+	}
 
 	// mosquitto_loop_forever(mosq, -1, 1);
+
+	SDL_CloseAudioDevice(dev);
 	
     mosquitto_destroy(mosq);
     mosquitto_lib_cleanup();
