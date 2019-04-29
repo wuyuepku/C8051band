@@ -2,4 +2,4 @@
 all: server
 
 server: server.cpp
-	g++ server.cpp -lmosquitto -lpthread -lm -lSDL2 -o server
+	g++ -std=c++11 server.cpp -lmosquitto -lpthread -lm -lSDL2 -o server
