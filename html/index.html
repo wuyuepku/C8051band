@@ -85,6 +85,12 @@ html, body {
 		console.log(message.destinationName + ": [" + (++cmdcnt) + "]: " + str);
 		if (message.destinationName == "band/info") {
 			$("#server_info").html(str);
+		} else if (message.destinationName == "band/" + clientid + "/start") {
+			setTimeout(() => {
+				let message2 = new Paho.MQTT.Message(str);
+				message2.destinationName = "band/" + clientid + "/stop";
+				mqtt.send(message2);
+			}, 500);  // test remove music done
 		}
 	}
 	function mqtt_connection_lost() {

@@ -46,3 +46,4 @@ For development, a testbed without MCU is high efficient, using `libsdl` to play
 clone [minimp3 project](https://github.com/lieff/minimp3) to anywhere, and run `player/build.sh`, the script will download libsdl automatically and install for you.
 
 `sudo apt install libsdl2-2.0-0 libsdl2-dev`
+

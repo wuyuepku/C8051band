@@ -47,8 +47,8 @@ struct play_t {
 	sound_t sound;
 	int idx;
 	float scale;
-	int ID;  // used to delete play object
-	play_t(const sound_t& _sound, float _scale=1): sound(_sound), idx(0), scale(_scale) {}
+	unsigned int ID;  // used to delete play object
+	play_t(const sound_t& _sound, unsigned int _ID, float _scale=1): sound(_sound), ID(_ID), idx(0), scale(_scale) {}
 };
 mutex plays_mutex;
 vector<play_t> plays;
@@ -85,6 +85,7 @@ void MyAudioCallback(void* userdata, Uint8* stream, int len) {
 void load_mp3_childdirs(const char* dirpath, const char* dirname);  // this will call load_mp3s
 
 int main(int argc, char* argv[]) {
+	srand((int)time(0));
 
 	// init mqtt server
 	mosquitto_lib_init();
@@ -115,7 +116,7 @@ int main(int argc, char* argv[]) {
 	want.freq = 8000;
 	want.format = AUDIO_U16;  // uint16_t, MCU will use 12bit unsigned value
 	want.channels = 1;
-	want.samples = 512;
+	want.samples = 128;
 	want.callback = MyAudioCallback;
 	want.userdata = NULL;  // pass here for user-defined data
 	dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);  // allow no change, SDL lib will automatically adapte the parameters
@@ -144,21 +145,31 @@ void log_callback(struct mosquitto *mosq, void *userdata, int level, const char 
 }
 
 void message_callback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *message) {
+	static char topicbuf[32];
     static char msgbuf[256];
 	if (strncmp(message->topic, "band/", 5) == 0) {
 		char* subtopic = message->topic + 5;
 		if (strcmp(subtopic, "query") == 0) {  // reply to query
 			mosquitto_publish(mosq, NULL, "band/info", strlen(VERSION_STR), VERSION_STR, USEQOS, 0);
-		} else if (strlen(subtopic) >= 7 && subtopic[6] == '/') {
+		} else if (strlen(subtopic) >= 7 && strlen(subtopic) < sizeof(topicbuf) && message->payloadlen < sizeof(msgbuf) && subtopic[6] == '/') {
 			char* clientid = subtopic;
 			clientid[6] = '\0';  // this will modify message->topic !!!!
 			char* subsubtopic = subtopic + 7;
-			char* payload = (char*)message->payload;
-			payload[message->payloadlen] = '\0';
-			printf("clientid %s[%s]: %s\n", clientid, subsubtopic, payload);
+			memcpy(msgbuf, message->payload, message->payloadlen);  // copy here
+			msgbuf[message->payloadlen] = '\0';
+			printf("clientid %s[%s]: %s\n", clientid, subsubtopic, msgbuf);
+			sprintf(topicbuf, "band/%s/", clientid);
 			if (strcmp(subsubtopic, "play") == 0) {
-				play_add(payload, 1);
+				int ID = play_add(msgbuf, 1);
+				strcat(topicbuf, "start");
+				sprintf(msgbuf, "%d", ID);
+				mosquitto_publish(mosq, NULL, topicbuf, strlen(msgbuf), msgbuf, USEQOS, 0);
+			} else if (strcmp(subsubtopic, "stop") == 0) {
+				strcat(topicbuf, "end");
+				sprintf(msgbuf, "%d", play_remove(atoi(msgbuf)));
+				mosquitto_publish(mosq, NULL, topicbuf, strlen(msgbuf), msgbuf, USEQOS, 0);
 			}
+			clientid[6] = '/';  // return
 		}
 	}
 }
@@ -236,11 +247,27 @@ void load_mp3_childdirs(const char* dirpath, const char* dirname) {  // name is 
 	printf("summary: %d samples in total, that is %fMB\n", sum, sum*2/1e6);
 }
 
+int find_idx_by_id(unsigned int ID) {
+	for (int i=0; i<plays.size(); ++i) {
+		if (plays[i].ID == ID) return i;
+	}
+	return -1;
+}
+
 int play_add(const sound_t& sound, float scale) {
+	unsigned int ID;
+	int i;
 	plays_mutex.lock();
-	plays.push_back(play_t(sound, scale));
+	for (i=0; i<5; ++i) {
+		ID = rand();
+		printf("try ID = %u\n", ID);
+		if (find_idx_by_id(ID) != -1) continue;
+		plays.push_back(play_t(sound, ID, scale));
+		break;
+	}
 	plays_mutex.unlock();
-	return 0;  // TODO: add ID
+	if (i < 5) return ID;
+	return 0;
 }
 
 int play_add(const char* name, float scale) {
@@ -250,5 +277,13 @@ int play_add(const char* name, float scale) {
 }
 
 int play_remove(int ID) {
-
+	int ret = 0;
+	plays_mutex.lock();
+	int idx = find_idx_by_id(ID);
+	if (idx != -1) {
+		plays.erase(plays.begin() + idx);
+		ret = ID;
+	}
+	plays_mutex.unlock();
+	return ret;
 }
