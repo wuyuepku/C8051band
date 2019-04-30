@@ -49,14 +49,29 @@
 
 <script>
 
+	var wait_id = false;
+	var record_id = 0;
 	function mqtt_message_arrive(message) {
 		let str = message.payloadString;
 		console.log(message.destinationName + ": [" + (++cmdcnt) + "]: " + str);
 		if (message.destinationName == "band/" + clientid + "/start") {
-
+			if (wait_id) {
+				record_id = str;
+				wait_id = false;
+				console.log("record_id: " + record_id);
+			}
 		}
 	}
 	function play(i) {
+		if (i == 1 && record_id != 0) {
+			// stop last one;
+			let message2 = new Paho.MQTT.Message(record_id);
+			message2.destinationName = "band/" + clientid + "/stop";
+			mqtt.send(message2);
+			record_id = 0;
+			return;
+		}
+		wait_id = true;
 		let name = "mario/" + i + ".mp3";
 		let message = new Paho.MQTT.Message(name);
 		message.destinationName = "band/" + clientid + "/play";
@@ -68,7 +83,16 @@
 					+ i + ')" class="center"><div class="centerline">' + html + '</div></div>');
 	}
 	$(function() {
-		addkey("white", 20, 90, 5, 5, 1, 0, "主题曲");
+		addkey("yellow", 30, 90, 5, 5, 1, 0, "主题曲");
+		addkey("yellowgreen", 15, 80/3, 40, 5, 11, 0, "硬币");
+		addkey("pink", 15, 80/3, 40, 5+(5+80/3)*1, 12, 0, "跳跃");
+		addkey("skyblue", 15, 80/3, 40, 5+(5+80/3)*2, 13, 0, "通电");
+		addkey("skyblue", 15, 80/3, 60, 5, 14, 0, "up");
+		addkey("yellowgreen", 15, 80/3, 60, 5+(5+80/3)*1, 15, 0, "电源关闭");
+		addkey("pink", 15, 80/3, 60, 5+(5+80/3)*2, 16, 0, "快点");
+		addkey("pink", 15, 80/3, 80, 5, 17, 0, "失去生命");
+		addkey("skyblue", 15, 80/3, 80, 5+(5+80/3)*1, 18, 0, "游戏结束");
+		addkey("yellowgreen", 15, 80/3, 80, 5+(5+80/3)*2, 19, 0, "明确课程");
 		band_init();
 	})
 </script>
