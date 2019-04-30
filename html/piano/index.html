@@ -29,10 +29,60 @@
 </style>
 </head>
 <body>
+	<div id="main">
+		<div style="background-color: red; position: absolute; height: 7.142857%; width: 30%; top: 0%; left: 0%;"></div>
+		<div style="background-color: orange; position: absolute; height: 7.142857%; width: 30%; top: 7.142857%; left: 0%;"></div>
+
+		</div>
+	</div>
 	
-	
-    <script src="mqttws31.min.js"></script>
-	<script src="jquery-3.3.1.min.js"></script>
+    <script src="../mqttws31.min.js"></script>
+	<script src="../jquery-3.3.1.min.js"></script>
+	<script src="../libband.js"></script>
+
+<script>
+	var colors = ["", "red", "orange", "yellow", "green", "blue", "purple", "pink"];
+	var blacks = [0, 1, 1, 0, 1, 1, 1, 0];
+
+	function mqtt_message_arrive(message) {
+		let str = message.payloadString;
+		console.log(message.destinationName + ": [" + (++cmdcnt) + "]: " + str);
+		if (message.destinationName == "band/" + clientid + "/start") {
+
+		}
+	}
+	function play(i, j, k) {
+		let name = "piano/" + i + j + (k?"#":"!") + ".mp3";
+		let message = new Paho.MQTT.Message(name);
+		message.destinationName = "band/" + clientid + "/play";
+		mqtt.send(message);
+	}
+	function addkey(color, height, width, top, left, i, j, k, zidx=0) {
+		$("#main").append('<div style="background-color: ' + color + '; position: absolute; height: ' + height + '%; width: ' + width + '%; top: ' 
+					+ top + '%; left: ' + left + '%; z-index: ' + zidx + '; border-right: 2px solid black;" onclick="play(' + i + ', ' + j + ', ' + k + ')"></div>');
+	}
+	$(function() {
+		for (let istart=1,i=istart; i<=2; ++i) {
+			for (let j=1; j<=7; ++j) {
+				addkey(colors[j], 100.0/14, 33, 100.0/14 * (j-1 + 7*(i-istart)), 0, i, j, 0, 2);
+				if (blacks[j]) addkey("black", 4, 16.5, 100.0/14 * (j + 7*(i-istart)) -2, 16.5, i, j, 1, 10);
+			}
+		}
+		for (let istart=3,i=istart; i<=4; ++i) {
+			for (let j=1; j<=7; ++j) {
+				addkey(colors[j], 100.0/14, 33, 100.0/14 * (j-1 + 7*(i-istart)), 16.5*2, i, j, 0, 1);
+				if (blacks[j]) addkey("black", 4, 16.5, 100.0/14 * (j + 7*(i-istart)) -2, 16.5*3, i, j, 1, 10);
+			}
+		}
+		for (let istart=5,i=istart; i<=6; ++i) {
+			for (let j=1; j<=7; ++j) {
+				addkey(colors[j], 100.0/14, 33, 100.0/14 * (j-1 + 7*(i-istart)), 16.5*4, i, j, 0);
+				if (blacks[j]) addkey("black", 4, 16.5, 100.0/14 * (j + 7*(i-istart)) -2, 16.5*5, i, j, 1, 10);
+			}
+		}
+		band_init();
+	})
+</script>
 
 </body>
 </html>
