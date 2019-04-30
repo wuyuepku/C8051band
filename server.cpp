@@ -203,7 +203,7 @@ void load_mp3s(const char* dirpath, const char* dirname) {
 	char path[NAME_MAX + 1];
 	char name[NAME_MAX + 1];
 	while ((ptr = readdir(dir)) != NULL) {
-		if (ptr->d_type != DT_DIR && ptr->d_name[0] != '.') {
+		if (ptr->d_type != DT_DIR && ptr->d_name[0] != '.' && ptr->d_name[strlen(ptr->d_name)-1] != 'l') {  // filter out html
 			strcpy(path, dirpath);
 			strcat(path, ptr->d_name);
 			strcpy(name, dirname);
