@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	<title>Mario</title>
+<style>
+	html, body {
+		height: 100%;
+		width: 100%;
+		margin: 0;
+		padding: 0;
+	}
+	#main {
+		height: 100%;
+		width: 100%;
+		margin: 0;
+		padding: 0;
+		text-align: center;
+		display: table;
+	}
+	#inner {
+		display: table-cell;
+		vertical-align: middle;
+		font-size: 200%;
+		font-weight: bold;
+	}
+	.center {
+		text-align: center;
+		display: table;
+	}
+	.centerline {
+		display: table-cell;
+		vertical-align: middle;
+		font-size: 200%;
+		font-weight: bold;
+	}
+</style>
+</head>
+<body>
+	<div id="main">
+
+	</div>
+	
+    <script src="../mqttws31.min.js"></script>
+	<script src="../jquery-3.3.1.min.js"></script>
+	<script src="../libband.js"></script>
+
+<script>
+
+	var wait_id = false;
+	var record_id = 0;
+	function mqtt_message_arrive(message) {
+		let str = message.payloadString;
+		console.log(message.destinationName + ": [" + (++cmdcnt) + "]: " + str);
+		if (message.destinationName == "band/" + clientid + "/start") {
+			if (wait_id) {
+				record_id = str;
+				wait_id = false;
+				console.log("record_id: " + record_id);
+			}
+		}
+	}
+	function play(i) {
+		if (i == 1 && record_id != 0) {
+			// stop last one;
+			let message2 = new Paho.MQTT.Message(record_id);
+			message2.destinationName = "band/" + clientid + "/stop";
+			mqtt.send(message2);
+			record_id = 0;
+			return;
+		}
+		wait_id = true;
+		let name = "mario/" + i + ".mp3";
+		let message = new Paho.MQTT.Message(name);
+		message.destinationName = "band/" + clientid + "/play";
+		mqtt.send(message);
+	}
+	function addkey(color, height, width, top, left, i, zidx=0, html="") {
+		$("#main").append('<div style="background-color: ' + color + '; position: absolute; height: ' + height + '%; width: ' + width + '%; top: ' 
+					+ top + '%; left: ' + left + '%; z-index: ' + zidx + '; border: 1px solid black;" onclick="play(' 
+					+ i + ')" class="center"><div class="centerline">' + html + '</div></div>');
+	}
+	$(function() {
+		addkey("yellow", 30, 90, 5, 5, 1, 0, "主题曲");
+		addkey("yellowgreen", 15, 80/3, 40, 5, 11, 0, "硬币");
+		addkey("pink", 15, 80/3, 40, 5+(5+80/3)*1, 12, 0, "跳跃");
+		addkey("skyblue", 15, 80/3, 40, 5+(5+80/3)*2, 13, 0, "通电");
+		addkey("skyblue", 15, 80/3, 60, 5, 14, 0, "up");
+		addkey("yellowgreen", 15, 80/3, 60, 5+(5+80/3)*1, 15, 0, "电源关闭");
+		addkey("pink", 15, 80/3, 60, 5+(5+80/3)*2, 16, 0, "快点");
+		addkey("pink", 15, 80/3, 80, 5, 17, 0, "失去生命");
+		addkey("skyblue", 15, 80/3, 80, 5+(5+80/3)*1, 18, 0, "游戏结束");
+		addkey("yellowgreen", 15, 80/3, 80, 5+(5+80/3)*2, 19, 0, "明确课程");
+		band_init();
+	})
+</script>
+
+</body>
+</html>
