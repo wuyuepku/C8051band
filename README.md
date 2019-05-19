@@ -7,9 +7,11 @@ multi-user music player on C8051F020
 
 you need to configure mqtt (with websocket) and nginx properly:
 
+`sudo apt install nginx mosquitto-dev mosquitto-clients`
+
 for `/etc/mosquitto/mosquitto.conf`:
 
-```init
+```ini
 port 1883
 protocol mqtt
 listener 9000
@@ -18,7 +20,7 @@ protocol websockets
 
 and for `/etc/nginx/sites-enabled/default` (the default http server):
 
-```init
+```ini
 # this is to server your file
 location ~ ^/band(.*)$ {
 	root /home/wuyue/Documents/C8051band/html;  # change this to your location
@@ -35,10 +37,13 @@ location ~ ^\/mqtt$ {
 
 ```
 
-then visiting [http://<your ip>/band/]() you will see mqtt connected, but still searching for band server.
+then visiting [http://<your ip>/band/]() you will see MQTT connected, but still searching for band server.
 
 ## development
 
-For development, a testbed without MCU is high efficient, using libsdl to play the music and debug the system.
+For development, a testbed without MCU is high efficient, using `libsdl` to play the music and debug the system.
 
 clone [minimp3 project](https://github.com/lieff/minimp3) to anywhere, and run `player/build.sh`, the script will download libsdl automatically and install for you.
+
+`sudo apt install libsdl2-2.0-0 libsdl2-dev`
+

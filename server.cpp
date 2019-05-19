@@ -22,6 +22,12 @@
 #include "minimp3_ex.h"
 #include "serial.h"
 using namespace std;
+using std::vector;
+using std::map;
+using std::make_pair;
+using std::string;
+using std::mutex;
+using std::remove_if;
 typedef struct {
 	int16_t* data;
 	int size;
