@@ -1,5 +1,6 @@
 #include <c8051f020.h>
 #include <stdio.h>
+#include "tftlib.h"
 
 #define DELAY_LCD 100
 #define SYSCLK 22118400
@@ -49,6 +50,12 @@ unsigned int xdata audio_buf[1024];  // 2048 byte
 #define audio_put(var) audio_buf[audio_write] = var; audio_write = (audio_write+1) & audio_mask
 #define audio_length() ( (audio_write + 0x400 - audio_read) & audio_mask )
 
+const Color_t black = {0, 0, 0};
+const Color_t red = {0x1F, 0, 0};
+const Color_t blue = {0, 0, 0x1F};
+const Color_t green = {0, 0x3F, 0};
+const Color_t white = {0x1F, 0x3F, 0x1F};
+
 void main(void) {
 	WDTCN = 0xDE;
 	WDTCN = 0xAD;
@@ -56,6 +63,7 @@ void main(void) {
 	PORT_Init();
 	UART0_Init();
 	Lcd1602_init();
+	lcd_init9481();
 	REF0CN = 0x03;
 	DAC1CN = 0x90;  // right aligned, using timer4
 	ES0 = 1;
@@ -66,6 +74,9 @@ void main(void) {
 	printf("C8051band v0.0.1\n");
 	printf("compiled at %s, %s\n", __TIME__, __DATE__);
 	Lcd1602_Write_Command(0x80);
+
+	display_color(white);
+	show_char(160, 240, red, white, 'F');
 
 	while (1) {
 		unsigned char a = Get_Newkey();
@@ -150,8 +161,8 @@ void UART0_ISR(void) interrupt 4 {
 	}
 }
 
-char outbuf[64];
-char inbuf[16];
+char xdata outbuf[64];
+char xdata inbuf[16];
 unsigned char inidx = 0;
 char c2char(char a) {
 	if (a >= 0 && a <= 9) return 0x30 | a;
@@ -205,13 +216,15 @@ void Delay(unsigned int k) {
 }
 
 void PORT_Init(void) {
+	EMI0CF = 0x1F; // non-multiplexed mode, external only
 	XBR0 = 0x04;  // enable UART0
-	XBR2 = 0x40;  // 01000010, XBARE=1(enable XBR)
+	XBR2 = 0x42;  // 01000010, XBARE=1(enable XBR), EMIFLE=1(P0.7 P0.6 as WR RD)
 	P74OUT = 0x30;  // P6 push-pull
-	P0MDOUT = 0xC1;
+	P0MDOUT = 0xC0;
 	P1MDOUT = 0xFF;  // push pull
 	P2MDOUT = 0xFF;
 	P3MDOUT = 0xFF;
+	EMI0TC = 0x41;  // external memory timing control: 1 sysclk cycle setup and hold time.
 }
 
 void UART0_Init(void) {
