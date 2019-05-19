@@ -14,6 +14,7 @@
 #include <thread>
 #include <chrono>
 #include <assert.h>
+#include <sched.h>
 #define MINIMP3_ONLY_MP3
 /*#define MINIMP3_ONLY_SIMD*/
 /*#define MINIMP3_NONSTANDARD_BUT_LOGICAL*/
@@ -34,7 +35,7 @@ typedef struct {
 } sound_t;
 map<string, sound_t> sounds;
 
-// #define WITH_SDL
+#define WITH_SDL
 #ifndef WITH_SDL
 #define Uint8 void
 #define SERIAL_PORT "/dev/ttyUSB0"
@@ -98,7 +99,19 @@ void MyAudioCallback(void* userdata, Uint8* stream, int len) {
 
 void load_mp3_childdirs(const char* dirpath, const char* dirname);  // this will call load_mp3s
 
+// setup as real-time process to optimize performance
+void optimize_real_time() {
+	pid_t pid = getpid();
+	struct sched_param param;
+	param.sched_priority = sched_get_priority_max(SCHED_RR);
+	sched_setscheduler(pid, SCHED_RR, &param);
+	pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
+}
+
 int main(int argc, char* argv[]) {
+
+	optimize_real_time();
+
 	srand((int)time(0));
 
 	// init mqtt server
