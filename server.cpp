@@ -11,6 +11,9 @@
 #include <string>
 #include <mutex>
 #include <algorithm>
+#include <thread>
+#include <chrono>
+#include <assert.h>
 #define MINIMP3_ONLY_MP3
 /*#define MINIMP3_ONLY_SIMD*/
 /*#define MINIMP3_NONSTANDARD_BUT_LOGICAL*/
@@ -18,19 +21,23 @@
 #define MINIMP3_ALLOW_MONO_STEREO_TRANSITION
 #include "minimp3_ex.h"
 #include "serial.h"
-using std::vector;
-using std::map;
-using std::make_pair;
-using std::string;
-using std::mutex;
-using std::remove_if;
+using namespace std;
 typedef struct {
 	int16_t* data;
 	int size;
 } sound_t;
 map<string, sound_t> sounds;
 
-#define WITH_SDL
+// #define WITH_SDL
+#ifndef WITH_SDL
+#define Uint8 void
+#define SERIAL_PORT "/dev/ttyUSB0"
+serial::Serial ser(SERIAL_PORT, 460800, serial::Timeout::simpleTimeout(1000));
+#define INBUF_SIZE 128  // should be small
+unsigned char inbuf[INBUF_SIZE];
+uint16_t u16buf[INBUF_SIZE];
+string indat;
+#endif
 
 #define VERSION_STR "C8051band v0.0.1, compiled at " __TIME__ ", " __DATE__ 
 #define USEQOS 0
@@ -127,6 +134,67 @@ int main(int argc, char* argv[]) {
 	SDL_PauseAudioDevice(dev, 0);  // play! this will call callback function
 #else
 	// initialize serial here, to call MyAudioCallback if data needed
+	thread serth([&] {
+		while (ser.available()) {
+			int readlen = ser.available();
+			if (readlen > INBUF_SIZE) readlen = INBUF_SIZE;
+			ser.read(inbuf, readlen);
+			printf("clear %d bytes from serial buffer\n", readlen);
+		}
+		printf("clear serial buffer done\n");
+		while (1) {
+			int len = ser.read(inbuf, INBUF_SIZE);
+			if (len == 0) {
+				printf("read timeout\n"); continue;
+			}
+			// printf("len = %d\n", len);
+			int acquire_audio_len = 0;
+			for (int i=0; i<len; ++i) {
+				if (inbuf[i] == 0x8F) ++acquire_audio_len;
+				else {
+					// printf("inbuf[i] = %d\n", (int)inbuf[i]);
+					assert(inbuf[i] >= 0 && inbuf[i] < 0x80 && "invalid special char");
+					indat.append(1, inbuf[i]);
+				}
+			}
+			for (int i=0; i<indat.length(); ++i) {  // handle one command
+				if (indat[i] == '\n') {
+					string cmd = indat.substr(0, i);
+					printf("cmd: %s\n", cmd.c_str());
+					indat = indat.substr(i+1);
+					// explain the cmd
+					if (cmd[0] == 'p' && cmd.length() == 2) {  // keyboard on C8051
+						char c = cmd[1];
+						assert(((c>='0'&&c<='9') || (c>='A'&&c<='F')) && "invalid key" );
+						int keynum = c>='0'&&c<='9' ? c-'0' : c-'A'+10;
+						// printf("keynum = %d\n", keynum);
+						if (keynum >= 1 && keynum <= 7) {
+							static const char* keys[] = {"piano/41!.mp3", "piano/42!.mp3", "piano/43!.mp3", "piano/44!.mp3",
+								"piano/45!.mp3", "piano/46!.mp3", "piano/47!.mp3"};
+							play_add(keys[keynum-1]);
+						} else if (keynum == 0) {
+							play_add("piano/52!.mp3");
+						} else if (keynum == 9) {
+							play_add("piano/51!.mp3");
+						} else if (keynum > 9) {
+							static const char* keys[] = {"piano/53!.mp3", "piano/54!.mp3", "piano/55!.mp3", "piano/56!.mp3",
+								"piano/57!.mp3", "piano/61!.mp3"};
+							play_add(keys[keynum-10]);
+						}
+					}
+				}
+			}
+			// printf("acquire_audio_len = %d\n", acquire_audio_len);
+			MyAudioCallback(NULL, (void*)u16buf, acquire_audio_len*2);
+			for (int i=0; i<acquire_audio_len; ++i) {  // re-format data to send
+				uint16_t dat = u16buf[i] >> 4;
+				unsigned char* ptr = (unsigned char*)&u16buf[i];
+				ptr[0] = 0x80 | (dat >> 6);
+				ptr[1] = 0xC0 | (dat & 0x3F);
+			}
+			ser.write((uint8_t*)u16buf, acquire_audio_len*2);
+		}
+	});
 #endif
 
 	// play_add("piano/41!.mp3", 1);

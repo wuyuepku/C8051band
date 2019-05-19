@@ -2,3 +2,9 @@
 *.o
 *.exe
 server
+
+mcuproj/*
+!mcuproj/labfinal.c
+!mcuproj/labfinal.md
+!mcuproj/labfinal.uvproj
+!mcuproj/STARTUP.A51
