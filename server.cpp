@@ -106,6 +106,7 @@ void optimize_real_time() {
 	param.sched_priority = sched_get_priority_max(SCHED_RR);
 	sched_setscheduler(pid, SCHED_RR, &param);
 	pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
+	nice(-20);  // more CPU
 }
 
 int main(int argc, char* argv[]) {
