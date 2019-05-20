@@ -35,7 +35,7 @@ typedef struct {
 } sound_t;
 map<string, sound_t> sounds;
 
-#define WITH_SDL
+// #define WITH_SDL
 #ifndef WITH_SDL
 #define Uint8 void
 #define SERIAL_PORT "/dev/ttyUSB0"
