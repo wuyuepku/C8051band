@@ -1,6 +1,9 @@
 #include <c8051f020.h>
 #include <stdio.h>
 #include "tftlib.h"
+#define USE_C8051F020
+#include "protocol.h"
+#include <string.h>
 
 #define DELAY_LCD 100
 #define SYSCLK 22118400
@@ -50,6 +53,11 @@ unsigned int xdata audio_buf[1024];  // 2048 byte
 #define audio_put(var) audio_buf[audio_write] = var; audio_write = (audio_write+1) & audio_mask
 #define audio_length() ( (audio_write + 0x400 - audio_read) & audio_mask )
 
+#define INFO_LINE1 "C8051band v0.0.1"
+#define INFO_LINE2 "compiled at %s, %s"
+
+void handle_one_command(void);
+
 void main(void) {
 	int cnt = 0;
 
@@ -67,25 +75,29 @@ void main(void) {
 	EA = 1;
 	Timer4_Init(SYSCLK/AUDIORATE);
 
-	printf("C8051band v0.0.1\n");
-	printf("compiled at %s, %s\n", __TIME__, __DATE__);
+	printf(INFO_LINE1"\n");
+	printf(INFO_LINE2"\n", __TIME__, __DATE__);
 	Lcd1602_Write_Command(0x80);
 	display_color(BKGCOLOR);
 
 	log_init();
-	log_push("hello world!");
-	log_push("yes!");
+	sprintf(logfifo[0], INFO_LINE1);
+	sprintf(logfifo[1], INFO_LINE2, __TIME__, __DATE__);
+	sprintf(logfifo[3], "system initialzed, welcome!");
+	logfirstline = 4;
 
 	while (1) {
-		char buf[10];
+		// char buf[10];
 		unsigned char a = Get_Newkey();
-		sprintf(buf, "line: %d", cnt);
-		++cnt;
-		log_push(buf);
+		// sprintf(buf, "line: %d", cnt);
+		// ++cnt;
+		// log_push(buf);
+		log_show();
 		if (a != NOKEY) {
 			printf("p%c\n", a<10?'0'+a:'A'+(a-10));
 		}
 		show_mode();
+		handle_one_command();
 	}
 
 }
@@ -135,6 +147,32 @@ char putchar(char c)  {
 	return c;
 }
 
+#define STRBUF_COUNT 16
+unsigned char strbuf_read = 0;
+unsigned char strbuf_write = 0;
+char xdata strbuf[STRBUF_COUNT][LOGLINEWIDTH+1];
+
+void handle_one_command(void) {
+	if (strbuf_read != strbuf_write) {
+		const char* cmdbuf = strbuf[strbuf_read];
+		unsigned char length = strlen(cmdbuf);
+		if (length == 0) return;
+		if (cmdbuf[0] == 'd' && length == 9) {  // draw rectangle on screen
+			DrawRect_t* pt = (DrawRect_t*)(cmdbuf+1);
+			Color_t color;
+			// draw_rectangle(20, 10, 10, 20, red);
+			color.R = drawrect_read_r(*pt);
+			color.G = drawrect_read_g(*pt);
+			color.B = drawrect_read_b(*pt);
+			draw_rectangle(drawrect_read_x(*pt), drawrect_read_y(*pt), drawrect_read_w(*pt), drawrect_read_h(*pt), color);
+		} else if (cmdbuf[0] == 'c' && length == 1) {  // clear now draws
+			draw_rectangle(0, 0, 320, 480, BKGCOLOR);
+		}
+		strbuf_read = (strbuf_read + 1) % STRBUF_COUNT;
+	}
+}
+
+unsigned char stri = 0;
 void UART0_ISR(void) interrupt 4 {
 	char c;
 	static unsigned char audio_tmp;
@@ -149,7 +187,23 @@ void UART0_ISR(void) interrupt 4 {
 				audio_tmp = c & 0x3F;
 			}
 		} else {
-			
+			if (c == '\n') {  // this is something to show
+				strbuf[strbuf_write][stri] = '\0';
+				log_push(strbuf[strbuf_write]);
+				stri = 0;
+			} else if (c == '\t') {  // this is a command
+				strbuf[strbuf_write][stri] = '\0';
+				strbuf_write = (strbuf_write + 1) % STRBUF_COUNT;  // fifo push
+				// handle_command();  // call this in main loop
+				stri = 0;
+			} else {
+				if (stri >= LOGLINEWIDTH) {  // auto new line
+					log_push(strbuf[strbuf_write]);  // show now stored information
+					stri = 0;
+				}
+				strbuf[strbuf_write][stri] = c;  // save this char
+				++stri;
+			}
 		}
 	}
 	if (TI0 == 1) {

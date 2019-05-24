@@ -15,6 +15,7 @@
 #include <chrono>
 #include <assert.h>
 #include <sched.h>
+#include <queue>
 #define MINIMP3_ONLY_MP3
 /*#define MINIMP3_ONLY_SIMD*/
 /*#define MINIMP3_NONSTANDARD_BUT_LOGICAL*/
@@ -22,6 +23,7 @@
 #define MINIMP3_ALLOW_MONO_STEREO_TRANSITION
 #include "minimp3_ex.h"
 #include "serial.h"
+#include "mcuproj/protocol.h"
 using namespace std;
 using std::vector;
 using std::map;
@@ -109,6 +111,38 @@ void optimize_real_time() {
 	nice(-20);  // more CPU
 }
 
+queue<char> screen_queue;
+
+void screen_sendone() {
+	if (screen_queue.size()) {
+		uint8_t dat = screen_queue.front();
+		ser.write(&dat, 1);
+		screen_queue.pop();
+	}
+}
+
+void screen_println(const string& line) {
+	for (int i=0; i<line.size(); ++i) screen_queue.push(line[i]);
+	screen_queue.push('\n');
+}
+
+void screen_drawrect(int x, int y, int w, int h, int r, int g, int b) {
+	DrawRect_t d;
+	drawrect_write_init(d);
+	drawrect_write_x(d, x);
+	drawrect_write_y(d, y);
+	drawrect_write_w(d, w);
+	drawrect_write_h(d, h);
+	drawrect_write_r(d, r);
+	drawrect_write_g(d, g);
+	drawrect_write_b(d, b);
+	for (int i=0; i<9; ++i) {
+		printf("0x%02X ", d.c[i]);
+		screen_queue.push(d.c[i]);
+	} printf("\n");
+	screen_queue.push('\t');
+}
+
 int main(int argc, char* argv[]) {
 
 	optimize_real_time();
@@ -154,6 +188,8 @@ int main(int argc, char* argv[]) {
 	SDL_PauseAudioDevice(dev, 0);  // play! this will call callback function
 #else
 	// initialize serial here, to call MyAudioCallback if data needed
+	screen_println("server started...");
+	// screen_drawrect(0, 0, 10, 10, 16, 0, 0);
 	thread serth([&] {
 		while (ser.available()) {
 			int readlen = ser.available();
@@ -206,6 +242,7 @@ int main(int argc, char* argv[]) {
 			}
 			// printf("acquire_audio_len = %d\n", acquire_audio_len);
 			MyAudioCallback(NULL, (void*)u16buf, acquire_audio_len*2);
+			screen_sendone();
 			for (int i=0; i<acquire_audio_len; ++i) {  // re-format data to send
 				uint16_t dat = u16buf[i] >> 4;
 				unsigned char* ptr = (unsigned char*)&u16buf[i];
@@ -361,6 +398,9 @@ int play_add(const sound_t& sound, float scale) {
 
 int play_add(const char* name, float scale) {
 	if (sounds.find(name) != sounds.end()) {
+		string line("play: ");
+		line += name;
+		screen_println(line);
 		return play_add(sounds[name], scale);
 	} return 0;
 }
