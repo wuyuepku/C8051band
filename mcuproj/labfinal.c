@@ -114,7 +114,7 @@ unsigned char fifowrite = 0;
 #define fifodeque(c) do { c = charfifo[fiforead]; ++fiforead; } while(0)
 void Timer4_ISR(void) interrupt 16 {
 	if (mode == MODE_WAIT_CONNECTION) {
-		if (audio_length() > 768) mode = MODE_CONNECTED;
+		if (audio_length() > 512) mode = MODE_CONNECTED;
 	} else if (mode == MODE_CONNECTED) {
 		if (audio_empty()) {
 			mode = MODE_WAIT_CONNECTION;

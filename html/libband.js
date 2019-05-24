@@ -30,7 +30,6 @@ function mqtt_send(topic, payload) {
 }
 function mqtt_connection_lost() {
 	set_status("red", "connection broken");
-	hide_iframe(null, 300);
 }
 function mqtt_failure() {
 	set_status("red", "connection failed");
