@@ -8,3 +8,4 @@ mcuproj/*
 !mcuproj/labfinal.md
 !mcuproj/labfinal.uvproj
 !mcuproj/STARTUP.A51
+!mcuproj/protocol.h
