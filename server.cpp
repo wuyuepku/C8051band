@@ -250,6 +250,7 @@ int main(int argc, char* argv[]) {
 				ptr[1] = 0xC0 | (dat & 0x3F);
 			}
 			ser.write((uint8_t*)u16buf, acquire_audio_len*2);
+			ser.flush();
 		}
 	});
 #endif
